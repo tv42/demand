@@ -18,7 +18,8 @@ And then run:
 
 And now you can run that app with just:
 
-    ./bytes2human
+    ./bytes2human 65536
+    64KiB
 
 If you put that directory in your `PATH`, the dot and slash won't be
 needed anymore.
