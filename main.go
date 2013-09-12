@@ -34,12 +34,15 @@ func getCacheDir() (string, error) {
 	return cache_dir, nil
 }
 
-// Create directory if it doesn't exist. Fail fatally if not possible.
-func mustMaybeMkdir(path string, perm os.FileMode) {
-	err := os.Mkdir(path, perm)
-	if err != nil && !os.IsExist(err) {
-		log.Fatalf("cannot create directory: %v", err)
+// Create directories if they don't exist.
+func maybeMkdirs(perm os.FileMode, paths ...string) error {
+	for _, path := range paths {
+		err := os.Mkdir(path, perm)
+		if err != nil && !os.IsExist(err) {
+			return err
+		}
 	}
+	return nil
 }
 
 // copy environment, but override GOPATH
@@ -127,9 +130,10 @@ func main() {
 	// if we're still here, we don't have a cached binary, or we're
 	// upgrading
 
-	mustMaybeMkdir(cache_dir, 0750)
-	mustMaybeMkdir(cache_bin_dir, 0750)
-	mustMaybeMkdir(cache_bin_arch_dir, 0750)
+	err = maybeMkdirs(0750, cache_dir, cache_bin_dir, cache_bin_arch_dir)
+	if err != nil {
+		log.Fatalf("cannot create cache directory: %v", err)
+	}
 
 	var spec Spec
 	spec_data, err := ioutil.ReadAll(spec_file)
