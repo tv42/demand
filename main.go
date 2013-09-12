@@ -192,9 +192,11 @@ func doit(args []string) error {
 	return nil
 }
 
+var prog = filepath.Base(os.Args[0])
+
 func usage() {
-	fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "  %s [OPTS] SPEC_PATH [ARGS..]\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "Usage of %s:\n", prog)
+	fmt.Fprintf(os.Stderr, "  %s [OPTS] SPEC_PATH [ARGS..]\n", prog)
 	flag.PrintDefaults()
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "Use as an interpreter:\n")
@@ -204,7 +206,6 @@ func usage() {
 }
 
 func main() {
-	prog := filepath.Base(os.Args[0])
 	log.SetFlags(0)
 	log.SetPrefix(prog + ": ")
 
