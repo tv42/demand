@@ -69,7 +69,7 @@ type Spec struct {
 	}
 }
 
-var Usage = func() {
+func usage() {
 	fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
 	fmt.Fprintf(os.Stderr, "  %s [OPTS] SPEC_PATH [ARGS..]\n", os.Args[0])
 	flag.PrintDefaults()
@@ -85,7 +85,7 @@ func main() {
 	log.SetFlags(0)
 	log.SetPrefix(prog + ": ")
 
-	flag.Usage = Usage
+	flag.Usage = usage
 	flag.Parse()
 	if flag.NArg() == 0 {
 		flag.Usage()
