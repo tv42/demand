@@ -21,17 +21,17 @@ var gopath = flag.Bool("gopath", false, "use GOPATH from environment instead of 
 
 var run = flag.Bool("run", true, "run the command, can be disabled to just ensure caching")
 
-func getCacheDir() string {
+func getCacheDir() (string, error) {
 	var cache_dir string
 	cache_dir = os.Getenv("DEMAND_CACHE_DIR")
 	if cache_dir == "" {
 		u, err := user.Current()
 		if err != nil {
-			log.Fatalf("cannot determine home directory: %v", err)
+			return "", fmt.Errorf("cannot determine home directory: %v", err)
 		}
 		cache_dir = filepath.Join(u.HomeDir, ".cache/demand")
 	}
-	return cache_dir
+	return cache_dir, nil
 }
 
 // Create directory if it doesn't exist. Fail fatally if not possible.
@@ -107,7 +107,10 @@ func main() {
 	}
 	defer spec_file.Close()
 
-	cache_dir := getCacheDir()
+	cache_dir, err := getCacheDir()
+	if err != nil {
+		log.Fatal(err)
+	}
 	cache_bin_dir := filepath.Join(cache_dir, "bin")
 	arch := fmt.Sprintf("%s_%s", runtime.GOOS, runtime.GOARCH)
 	cache_bin_arch_dir := filepath.Join(cache_bin_dir, arch)
