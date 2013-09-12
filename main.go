@@ -72,47 +72,25 @@ type Spec struct {
 	}
 }
 
-func usage() {
-	fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "  %s [OPTS] SPEC_PATH [ARGS..]\n", os.Args[0])
-	flag.PrintDefaults()
-	fmt.Fprintf(os.Stderr, "\n")
-	fmt.Fprintf(os.Stderr, "Use as an interpreter:\n")
-	fmt.Fprintf(os.Stderr, "  #!/usr/bin/env demand\n")
-	fmt.Fprintf(os.Stderr, "  go:\n")
-	fmt.Fprintf(os.Stderr, "    import: GO_IMPORT_PATH_HERE\n")
-}
-
-func main() {
-	prog := filepath.Base(os.Args[0])
-	log.SetFlags(0)
-	log.SetPrefix(prog + ": ")
-
-	flag.Usage = usage
-	flag.Parse()
-	if flag.NArg() == 0 {
-		flag.Usage()
-		os.Exit(2)
-	}
-
-	spec_path := flag.Arg(0)
+func doit(args []string) error {
+	spec_path := args[0]
 
 	spec_base := filepath.Base(spec_path)
 	if spec_base[0] == '.' {
-		log.Fatalf("refusing to run hidden spec file: %s", spec_path)
+		return fmt.Errorf("refusing to run hidden spec file: %s", spec_path)
 	}
 
 	// open it here to guard against typos; we don't need to read
 	// until we know it's a cache miss
 	spec_file, err := os.Open(spec_path)
 	if err != nil {
-		log.Fatalf("cannot open spec file: %v", err)
+		return fmt.Errorf("cannot open spec file: %v", err)
 	}
 	defer spec_file.Close()
 
 	cache_dir, err := getCacheDir()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	cache_bin_dir := filepath.Join(cache_dir, "bin")
 	arch := fmt.Sprintf("%s_%s", runtime.GOOS, runtime.GOARCH)
@@ -123,7 +101,7 @@ func main() {
 	if *run && !*upgrade {
 		err = runBinary(binary, flag.Args(), os.Environ())
 		if err != nil && !os.IsNotExist(err) {
-			log.Fatalf("cannot exec %s: %v", binary, err)
+			return fmt.Errorf("cannot exec %s: %v", binary, err)
 		}
 	}
 
@@ -132,22 +110,22 @@ func main() {
 
 	err = maybeMkdirs(0750, cache_dir, cache_bin_dir, cache_bin_arch_dir)
 	if err != nil {
-		log.Fatalf("cannot create cache directory: %v", err)
+		return fmt.Errorf("cannot create cache directory: %v", err)
 	}
 
 	var spec Spec
 	spec_data, err := ioutil.ReadAll(spec_file)
 	err = goyaml.Unmarshal(spec_data, &spec)
 	if err != nil {
-		log.Fatalf("cannot parse spec file: %v", err)
+		return fmt.Errorf("cannot parse spec file: %v", err)
 	}
 	if spec.Go.Import == "" {
-		log.Fatalf("spec file does not specify import path: %s", spec_path)
+		return fmt.Errorf("spec file does not specify import path: %s", spec_path)
 	}
 
 	tmp_gopath, err := ioutil.TempDir("", "demand-gopath-")
 	if err != nil {
-		log.Fatalf("cannot create temp directory: %v", err)
+		return fmt.Errorf("cannot create temp directory: %v", err)
 	}
 	defer func() {
 		err := os.RemoveAll(tmp_gopath)
@@ -177,7 +155,7 @@ func main() {
 	cmd.Env = env
 	err = cmd.Run()
 	if err != nil {
-		log.Fatalf("could not get go package: %v", err)
+		return fmt.Errorf("could not get go package: %v", err)
 	}
 
 	// poor man's tempfile atomicity; go build complains if
@@ -196,19 +174,50 @@ func main() {
 	cmd.Env = env
 	err = cmd.Run()
 	if err != nil {
-		log.Fatalf("could not build go package: %v", err)
+		return fmt.Errorf("could not build go package: %v", err)
 	}
 
 	err = os.Rename(tmp_bin, binary)
 	if err != nil {
-		log.Fatalf("could put new binary in place: %v", err)
+		return fmt.Errorf("could put new binary in place: %v", err)
 	}
 
 	if *run {
 		// now run it (again); this time ENOENT means trouble
 		err = runBinary(binary, flag.Args(), os.Environ())
 		if err != nil {
-			log.Fatalf("cannot exec %s: %v", binary, err)
+			return fmt.Errorf("cannot exec %s: %v", binary, err)
 		}
+	}
+	return nil
+}
+
+func usage() {
+	fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "  %s [OPTS] SPEC_PATH [ARGS..]\n", os.Args[0])
+	flag.PrintDefaults()
+	fmt.Fprintf(os.Stderr, "\n")
+	fmt.Fprintf(os.Stderr, "Use as an interpreter:\n")
+	fmt.Fprintf(os.Stderr, "  #!/usr/bin/env demand\n")
+	fmt.Fprintf(os.Stderr, "  go:\n")
+	fmt.Fprintf(os.Stderr, "    import: GO_IMPORT_PATH_HERE\n")
+}
+
+func main() {
+	prog := filepath.Base(os.Args[0])
+	log.SetFlags(0)
+	log.SetPrefix(prog + ": ")
+
+	flag.Usage = usage
+	flag.Parse()
+	if flag.NArg() == 0 {
+		flag.Usage()
+		os.Exit(2)
+	}
+
+	err := doit(flag.Args())
+	if err != nil {
+		log.Print(err)
+		os.Exit(1)
 	}
 }
