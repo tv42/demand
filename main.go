@@ -16,11 +16,11 @@ import (
 	"syscall"
 )
 
-var upgrade = flag.Bool("upgrade", false, "force upgrade even if older version exists")
-
-var gopath = flag.Bool("gopath", false, "use GOPATH from environment instead of downloading all dependencies")
-
-var run = flag.Bool("run", true, "run the command, can be disabled to just ensure caching")
+var (
+	upgrade = flag.Bool("upgrade", false, "force upgrade even if older version exists")
+	gopath  = flag.Bool("gopath", false, "use GOPATH from environment instead of downloading all dependencies")
+	run     = flag.Bool("run", true, "run the command, can be disabled to just ensure caching")
+)
 
 func getCacheDir() (string, error) {
 	var cache_dir string
