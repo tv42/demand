@@ -17,9 +17,9 @@ import (
 )
 
 var (
-	upgrade = flag.Bool("upgrade", false, "force upgrade even if older version exists")
-	gopath  = flag.Bool("gopath", false, "use GOPATH from environment instead of downloading all dependencies")
-	run     = flag.Bool("run", true, "run the command, can be disabled to just ensure caching")
+	upgrade   = flag.Bool("upgrade", false, "force upgrade even if older version exists")
+	gopath    = flag.Bool("gopath", false, "use GOPATH from environment instead of downloading all dependencies")
+	onlyBuild = flag.Bool("build", false, "only build, do not run command (can pass multiple spec files)")
 )
 
 func getCacheDir() (string, error) {
@@ -179,7 +179,7 @@ func doit(args []string) error {
 
 	binary := filepath.Join(cache_bin_arch_dir, spec_base)
 
-	if *run && !*upgrade {
+	if !*onlyBuild && !*upgrade {
 		err = runBinary(binary, flag.Args(), os.Environ())
 		if err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("cannot exec %s: %v", binary, err)
@@ -193,11 +193,23 @@ func doit(args []string) error {
 		return err
 	}
 
-	if *run {
+	if !*onlyBuild {
 		// now run it (again); this time ENOENT means trouble
 		err = runBinary(binary, flag.Args(), os.Environ())
 		if err != nil {
 			return fmt.Errorf("cannot exec %s: %v", binary, err)
+		}
+	}
+	return nil
+}
+
+func dobuild(specs []string) error {
+	var err error
+	for i, _ := range specs {
+		args := specs[i : i+1]
+		err = doit(args)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -208,6 +220,11 @@ var prog = filepath.Base(os.Args[0])
 func usage() {
 	fmt.Fprintf(os.Stderr, "Usage of %s:\n", prog)
 	fmt.Fprintf(os.Stderr, "  %s [OPTS] SPEC_PATH [ARGS..]\n", prog)
+	fmt.Fprintf(os.Stderr, "\n")
+	fmt.Fprintf(os.Stderr, "Only build, not run command:\n")
+	fmt.Fprintf(os.Stderr, "  %s -build [OPTS] SPEC_PATH..\n", prog)
+	fmt.Fprintf(os.Stderr, "\n")
+	fmt.Fprintf(os.Stderr, "Options:\n")
 	flag.PrintDefaults()
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "Use as an interpreter:\n")
@@ -227,7 +244,13 @@ func main() {
 		os.Exit(2)
 	}
 
-	err := doit(flag.Args())
+	var err error
+	if *onlyBuild {
+		err = dobuild(flag.Args())
+	} else {
+		err = doit(flag.Args())
+	}
+
 	if err != nil {
 		log.Print(err)
 		os.Exit(1)
