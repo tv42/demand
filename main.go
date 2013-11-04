@@ -221,7 +221,7 @@ func usage() {
 	fmt.Fprintf(os.Stderr, "Usage of %s:\n", prog)
 	fmt.Fprintf(os.Stderr, "  %s [OPTS] SPEC_PATH [ARGS..]\n", prog)
 	fmt.Fprintf(os.Stderr, "\n")
-	fmt.Fprintf(os.Stderr, "Only build, not run command:\n")
+	fmt.Fprintf(os.Stderr, "Only build, do not run command:\n")
 	fmt.Fprintf(os.Stderr, "  %s -build [OPTS] SPEC_PATH..\n", prog)
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "Options:\n")
