@@ -167,7 +167,10 @@ func doit(args []string) error {
 	}
 	// we rely on Go's automatic use of O_CLOEXEC to close this in
 	// syscall.Exec, this defer is a nice gesture for error cases
-	defer spec_file.Close()
+	defer func() {
+		// silence errcheck
+		_ = spec_file.Close()
+	}()
 
 	cache_dir, err := getCacheDir()
 	if err != nil {
