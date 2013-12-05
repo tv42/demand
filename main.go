@@ -23,16 +23,16 @@ var (
 )
 
 func getCacheDir() (string, error) {
-	var cache_dir string
-	cache_dir = os.Getenv("DEMAND_CACHE_DIR")
-	if cache_dir == "" {
+	var cacheDir string
+	cacheDir = os.Getenv("DEMAND_CACHE_DIR")
+	if cacheDir == "" {
 		u, err := user.Current()
 		if err != nil {
 			return "", fmt.Errorf("cannot determine home directory: %v", err)
 		}
-		cache_dir = filepath.Join(u.HomeDir, ".cache/demand")
+		cacheDir = filepath.Join(u.HomeDir, ".cache/demand")
 	}
-	return cache_dir, nil
+	return cacheDir, nil
 }
 
 // Create directories if they don't exist.
@@ -73,42 +73,42 @@ type specification struct {
 	}
 }
 
-func build(cache_dir, cache_bin_dir, cache_bin_arch_dir string,
-	spec_path string, spec_file io.Reader, binary string) error {
-	err := maybeMkdirs(0750, cache_dir, cache_bin_dir, cache_bin_arch_dir)
+func build(cacheDir, cacheBinDir, cacheBinArchDir string,
+	specPath string, specFile io.Reader, binary string) error {
+	err := maybeMkdirs(0750, cacheDir, cacheBinDir, cacheBinArchDir)
 	if err != nil {
 		return fmt.Errorf("cannot create cache directory: %v", err)
 	}
 
 	var spec specification
-	spec_data, err := ioutil.ReadAll(spec_file)
-	err = goyaml.Unmarshal(spec_data, &spec)
+	specData, err := ioutil.ReadAll(specFile)
+	err = goyaml.Unmarshal(specData, &spec)
 	if err != nil {
 		return fmt.Errorf("cannot parse spec file: %v", err)
 	}
 	if spec.Go.Import == "" {
-		return fmt.Errorf("spec file does not specify import path: %s", spec_path)
+		return fmt.Errorf("spec file does not specify import path: %s", specPath)
 	}
 
-	tmp_gopath, err := ioutil.TempDir("", "demand-gopath-")
+	tmpGopath, err := ioutil.TempDir("", "demand-gopath-")
 	if err != nil {
 		return fmt.Errorf("cannot create temp directory: %v", err)
 	}
 	defer func() {
-		err := os.RemoveAll(tmp_gopath)
+		err := os.RemoveAll(tmpGopath)
 		if err != nil {
 			log.Printf("tempdir cleanup failed: %v", err)
 		}
 	}()
 
-	env_gopath := tmp_gopath
+	envGopath := tmpGopath
 	if *gopath {
-		old_gopath := os.Getenv("GOPATH")
-		if old_gopath != "" {
-			env_gopath = env_gopath + string(filepath.ListSeparator) + old_gopath
+		oldGopath := os.Getenv("GOPATH")
+		if oldGopath != "" {
+			envGopath = envGopath + string(filepath.ListSeparator) + oldGopath
 		}
 	}
-	env := copyEnvWithGopath(env_gopath)
+	env := copyEnvWithGopath(envGopath)
 
 	// TODO -upgrade should be handled just by the fact that we have a
 	// clean GOPATH, but double check what happens on -gopath -upgrade
@@ -116,7 +116,7 @@ func build(cache_dir, cache_bin_dir, cache_bin_arch_dir string,
 	// need to do this in two steps, as "go get" won't let us control
 	// destination
 	cmd := exec.Command("go", "get", "-d", "--", spec.Go.Import)
-	cmd.Dir = tmp_gopath
+	cmd.Dir = tmpGopath
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	cmd.Env = env
@@ -127,15 +127,15 @@ func build(cache_dir, cache_bin_dir, cache_bin_arch_dir string,
 
 	// poor man's tempfile atomicity; go build complains if
 	// destination exists
-	tmp_bin := fmt.Sprintf("%s.%d.tmp", binary, os.Getpid())
+	tmpBin := fmt.Sprintf("%s.%d.tmp", binary, os.Getpid())
 	defer func() {
-		err := os.Remove(tmp_bin)
+		err := os.Remove(tmpBin)
 		if err != nil && !os.IsNotExist(err) {
 			log.Printf("temp binary cleanup failed: %v", err)
 		}
 	}()
-	cmd = exec.Command("go", "build", "-o", tmp_bin, "--", spec.Go.Import)
-	cmd.Dir = tmp_gopath
+	cmd = exec.Command("go", "build", "-o", tmpBin, "--", spec.Go.Import)
+	cmd.Dir = tmpGopath
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	cmd.Env = env
@@ -144,7 +144,7 @@ func build(cache_dir, cache_bin_dir, cache_bin_arch_dir string,
 		return fmt.Errorf("could not build go package: %v", err)
 	}
 
-	err = os.Rename(tmp_bin, binary)
+	err = os.Rename(tmpBin, binary)
 	if err != nil {
 		return fmt.Errorf("could put new binary in place: %v", err)
 	}
@@ -152,16 +152,16 @@ func build(cache_dir, cache_bin_dir, cache_bin_arch_dir string,
 }
 
 func doit(args []string) error {
-	spec_path := args[0]
+	specPath := args[0]
 
-	spec_base := filepath.Base(spec_path)
-	if spec_base[0] == '.' {
-		return fmt.Errorf("refusing to run hidden spec file: %s", spec_path)
+	specBase := filepath.Base(specPath)
+	if specBase[0] == '.' {
+		return fmt.Errorf("refusing to run hidden spec file: %s", specPath)
 	}
 
 	// open it here to guard against typos; we don't need to read
 	// until we know it's a cache miss
-	spec_file, err := os.Open(spec_path)
+	specFile, err := os.Open(specPath)
 	if err != nil {
 		return fmt.Errorf("cannot open spec file: %v", err)
 	}
@@ -169,18 +169,18 @@ func doit(args []string) error {
 	// syscall.Exec, this defer is a nice gesture for error cases
 	defer func() {
 		// silence errcheck
-		_ = spec_file.Close()
+		_ = specFile.Close()
 	}()
 
-	cache_dir, err := getCacheDir()
+	cacheDir, err := getCacheDir()
 	if err != nil {
 		return err
 	}
-	cache_bin_dir := filepath.Join(cache_dir, "bin")
+	cacheBinDir := filepath.Join(cacheDir, "bin")
 	arch := fmt.Sprintf("%s_%s", runtime.GOOS, runtime.GOARCH)
-	cache_bin_arch_dir := filepath.Join(cache_bin_dir, arch)
+	cacheBinArchDir := filepath.Join(cacheBinDir, arch)
 
-	binary := filepath.Join(cache_bin_arch_dir, spec_base)
+	binary := filepath.Join(cacheBinArchDir, specBase)
 
 	if !*onlyBuild && !*upgrade {
 		err = runBinary(binary, flag.Args(), os.Environ())
@@ -191,7 +191,7 @@ func doit(args []string) error {
 
 	// if we're still here, we don't have a cached binary, or we're
 	// upgrading
-	err = build(cache_dir, cache_bin_dir, cache_bin_arch_dir, spec_path, spec_file, binary)
+	err = build(cacheDir, cacheBinDir, cacheBinArchDir, specPath, specFile, binary)
 	if err != nil {
 		return err
 	}
@@ -208,7 +208,7 @@ func doit(args []string) error {
 
 func dobuild(specs []string) error {
 	var err error
-	for i, _ := range specs {
+	for i := range specs {
 		args := specs[i : i+1]
 		err = doit(args)
 		if err != nil {
