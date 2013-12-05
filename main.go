@@ -67,7 +67,7 @@ func runBinary(binary string, args []string, env []string) error {
 	return syscall.Exec(binary, args, env)
 }
 
-type Spec struct {
+type specification struct {
 	Go struct {
 		Import string
 	}
@@ -80,7 +80,7 @@ func build(cache_dir, cache_bin_dir, cache_bin_arch_dir string,
 		return fmt.Errorf("cannot create cache directory: %v", err)
 	}
 
-	var spec Spec
+	var spec specification
 	spec_data, err := ioutil.ReadAll(spec_file)
 	err = goyaml.Unmarshal(spec_data, &spec)
 	if err != nil {
