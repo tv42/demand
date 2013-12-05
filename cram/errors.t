@@ -1,23 +1,17 @@
-  $ T="$(mktemp -d --suffix=".demand.cram")"
-  $ trap "rm -rf -- \"$T\"" EXIT
-  $ DEMAND_CACHE_DIR="$T/cache" demand -build "$T/non-existent"
-  demand: cannot open spec file: open .*/non-existent: no such file or directory (re)
+  $ DEMAND_CACHE_DIR="$PWD/cache" demand -build non-existent
+  demand: cannot open spec file: open non-existent: no such file or directory
   [1]
 
-  $ T="$(mktemp -d --suffix=".demand.cram")"
-  $ trap "rm -rf -- \"$T\"" EXIT
-  $ cat >"$T/foo" <<EOF
+  $ cat >foo <<EOF
   > %%%i am not even yaml!
   > EOF
-  $ DEMAND_CACHE_DIR="$T/cache" demand -build "$T/foo"
+  $ DEMAND_CACHE_DIR="$PWD/cache" demand -build foo
   demand: cannot parse spec file: .* (re)
   [1]
 
-  $ T="$(mktemp -d --suffix=".demand.cram")"
-  $ trap "rm -rf -- \"$T\"" EXIT
-  $ cat >"$T/foo" <<EOF
+  $ cat >foo <<EOF
   > # broken on purpose
   > EOF
-  $ DEMAND_CACHE_DIR="$T/cache" demand -build "$T/foo"
-  demand: spec file does not specify import path: .*/foo (re)
+  $ DEMAND_CACHE_DIR="$PWD/cache" demand -build foo
+  demand: spec file does not specify import path: foo
   [1]
