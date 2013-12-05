@@ -1,8 +1,13 @@
   $ demand -help
   Usage of demand:
     demand [OPTS] SPEC_PATH [ARGS..]
+  
+  Only build, do not run command:
+    demand -build [OPTS] SPEC_PATH..
+  
+  Options:
+    -build=false: only build, do not run command (can pass multiple spec files)
     -gopath=false: use GOPATH from environment instead of downloading all dependencies
-    -run=true: run the command, can be disabled to just ensure caching
     -upgrade=false: force upgrade even if older version exists
   
   Use as an interpreter:
@@ -14,8 +19,13 @@
   $ demand
   Usage of demand:
     demand [OPTS] SPEC_PATH [ARGS..]
+  
+  Only build, do not run command:
+    demand -build [OPTS] SPEC_PATH..
+  
+  Options:
+    -build=false: only build, do not run command (can pass multiple spec files)
     -gopath=false: use GOPATH from environment instead of downloading all dependencies
-    -run=true: run the command, can be disabled to just ensure caching
     -upgrade=false: force upgrade even if older version exists
   
   Use as an interpreter:
