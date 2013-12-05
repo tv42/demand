@@ -46,7 +46,7 @@ Upgrading
 If you want to grab a newer version of an app installed with `demand`,
 run:
 
-    demand -upgrade NAME
+    demand -build -upgrade NAME
 
 where `NAME` is one of:
 
@@ -77,7 +77,7 @@ If you want to use `demand` to run commands without uploading the
 source to Github and such, you can tell `demand` to build and cache
 the package using your current `GOPATH`:
 
-    demand -upgrade -gopath bytes2human
+    demand -build -upgrade -gopath bytes2human
 
 Build results and missing dependencies are still written to a
 temporary directory.
