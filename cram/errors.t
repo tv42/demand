@@ -15,3 +15,8 @@
   $ DEMAND_CACHE_DIR="$PWD/cache" demand -build foo
   demand: spec file does not specify import path: foo
   [1]
+
+  $ ln -s not-exist dangling
+  $ DEMAND_CACHE_DIR="$PWD/cache" demand -build dangling
+  demand: cannot open spec file: open dangling: no such file or directory
+  [1]

@@ -46,6 +46,25 @@ func maybeMkdirs(perm os.FileMode, paths ...string) error {
 	return nil
 }
 
+// like os.Readlink but returns empty string and success for non-symlinks
+func maybeReadlink(path string) (string, error) {
+	dest, err := os.Readlink(path)
+	if err == nil {
+		return dest, nil
+	}
+	err2, ok := err.(*os.PathError)
+	if !ok {
+		return path, err
+	}
+	switch err2.Err {
+	case syscall.EINVAL, syscall.ENOENT:
+		// not a symlink, never mind
+		return "", nil
+	default:
+		return path, err
+	}
+}
+
 // copy environment, but override GOPATH
 func copyEnvWithGopath(gopath string) []string {
 	old := os.Environ()
@@ -157,6 +176,14 @@ func doit(args []string) error {
 	specBase := filepath.Base(specPath)
 	if specBase[0] == '.' {
 		return fmt.Errorf("refusing to run hidden spec file: %s", specPath)
+	}
+
+	dest, err := maybeReadlink(specPath)
+	if err != nil {
+		return fmt.Errorf("readlink: %v", err)
+	}
+	if dest != "" {
+		specBase = filepath.Base(dest)
 	}
 
 	// open it here to guard against typos; we don't need to read
