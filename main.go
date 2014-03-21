@@ -14,7 +14,7 @@ import (
 	"strings"
 	"syscall"
 
-	"launchpad.net/goyaml"
+	"gopkg.in/v1/yaml"
 )
 
 var (
@@ -102,7 +102,7 @@ func build(cacheDir, cacheBinDir, cacheBinArchDir string,
 
 	var spec specification
 	specData, err := ioutil.ReadAll(specFile)
-	err = goyaml.Unmarshal(specData, &spec)
+	err = yaml.Unmarshal(specData, &spec)
 	if err != nil {
 		return fmt.Errorf("cannot parse spec file: %v", err)
 	}
