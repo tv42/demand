@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"launchpad.net/goyaml"
 	"log"
 	"os"
 	"os/exec"
@@ -14,6 +13,8 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+
+	"launchpad.net/goyaml"
 )
 
 var (
