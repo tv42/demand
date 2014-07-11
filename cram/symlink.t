@@ -1,6 +1,6 @@
   $ cat >foo <<EOF
   > go:
-  >   import: github.com/tv42/humanize-bytes/cmd/bytes2human
+  >   import: github.com/tv42/demand/testutil/notcalled
   > EOF
   $ ln -s foo bar
   $ C="$PWD/cache"
@@ -11,5 +11,5 @@
   > echo mock cached binary
   > EOF
   $ chmod a+x -- "$C_BIN/foo"
-  $ DEMAND_CACHE_DIR="$C" demand bar
+  $ DEMAND_CACHE_DIR="$C" demand -gopath bar
   mock cached binary
