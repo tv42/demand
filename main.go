@@ -209,9 +209,12 @@ func doit(args []string) error {
 	cacheBinArchDir := filepath.Join(cacheBinDir, arch)
 
 	binary := filepath.Join(cacheBinArchDir, specBase)
+	binArgs := make([]string, len(args))
+	binArgs[0] = binary
+	copy(binArgs[1:], args[1:])
 
 	if !*onlyBuild && !*upgrade {
-		err = runBinary(binary, flag.Args(), os.Environ())
+		err = runBinary(binary, binArgs, os.Environ())
 		if err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("cannot exec %s: %v", binary, err)
 		}
@@ -226,7 +229,7 @@ func doit(args []string) error {
 
 	if !*onlyBuild {
 		// now run it (again); this time ENOENT means trouble
-		err = runBinary(binary, flag.Args(), os.Environ())
+		err = runBinary(binary, binArgs, os.Environ())
 		if err != nil {
 			return fmt.Errorf("cannot exec %s: %v", binary, err)
 		}
