@@ -1,15 +1,17 @@
   $ cat >foo <<EOF
   > go:
+  >   import: github.com/tv42/demand/testutil/succeed
+  > EOF
+  $ C="$PWD/cache"
+  $ DEMAND_CACHE_DIR="$C" demand -build -gopath foo
+  $ # now replace it with something noticable, while not making it seem new
+  $ touch -r foo stamp
+  $ cat >foo <<EOF
+  > go:
   >   import: github.com/tv42/demand/testutil/notcalled
   > EOF
+  $ touch -r stamp foo
+  $ # run via symlink; must use cached results for linked-to specfile
   $ ln -s foo bar
-  $ C="$PWD/cache"
-  $ C_BIN="$PWD/cache/bin/$(go env GOOS)_$(go env GOARCH)"
-  $ mkdir -p -- "$C_BIN"
-  $ cat >"$C_BIN/foo" <<EOF
-  > #!/bin/sh
-  > echo mock cached binary
-  > EOF
-  $ chmod a+x -- "$C_BIN/foo"
   $ DEMAND_CACHE_DIR="$C" demand -gopath bar
-  mock cached binary
+  ok
