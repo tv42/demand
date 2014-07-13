@@ -166,7 +166,7 @@ func build(cacheDir, cacheBinDir, cacheBinArchDir string,
 
 	err = os.Rename(tmpBin, binary)
 	if err != nil {
-		return fmt.Errorf("could put new binary in place: %v", err)
+		return fmt.Errorf("could not put new binary in place: %v", err)
 	}
 	return nil
 }
