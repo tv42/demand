@@ -58,7 +58,7 @@ func maybeReadlink(path string) (string, error) {
 		return path, err
 	}
 	switch err2.Err {
-	case syscall.EINVAL, syscall.ENOENT:
+	case syscall.EINVAL:
 		// not a symlink, never mind
 		return "", nil
 	default:
@@ -179,14 +179,6 @@ func doit(args []string) error {
 		return fmt.Errorf("refusing to run hidden spec file: %s", specPath)
 	}
 
-	dest, err := maybeReadlink(specPath)
-	if err != nil {
-		return fmt.Errorf("readlink: %v", err)
-	}
-	if dest != "" {
-		specBase = filepath.Base(dest)
-	}
-
 	// open it here to guard against typos; we don't need to read
 	// until we know it's a cache miss
 	specFile, err := os.Open(specPath)
@@ -199,6 +191,14 @@ func doit(args []string) error {
 		// silence errcheck
 		_ = specFile.Close()
 	}()
+
+	dest, err := maybeReadlink(specPath)
+	if err != nil {
+		return fmt.Errorf("readlink: %v", err)
+	}
+	if dest != "" {
+		specBase = filepath.Base(dest)
+	}
 
 	cacheDir, err := getCacheDir()
 	if err != nil {
