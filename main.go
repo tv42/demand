@@ -17,6 +17,63 @@ import (
 	"gopkg.in/yaml.v1"
 )
 
+/*
+
+Cache structure
+
+Given a spec file like
+
+    /home/jdoe/bin/mycommand
+
+the cached result for that is
+
+    ~/.cache/demand/bin/${GOOS}_${GOARCH}/
+      !home!jdoe!bin/
+        mycommand
+
+This gives us the following desirable properties:
+
+1. Two spec files with the same basename do not collide.
+
+2. Programs can change their behavior based on the name they are
+    launched with.
+
+3. Usage messages can include the basename dynamically and still match
+    user expectations.
+
+The execve(2) syscall allows the caller to pass an argv[0] that is
+independent of the executable being launched. This is undesirable, as
+it would prevent the application for re-opening argv[0] to e.g. access
+bundled assets. Thus, we make the effort of having the actual
+executable exist with the right basename.
+
+If there are also symlinks
+
+    /home/jdoe/bin/myalias -> mycommand
+    /home/jdoe/foo/bar -> ../bin/myalias
+
+the cache directory will contain symlinks
+
+    !home!jdoe!bin/myalias -> mycommand
+    !home!jdoe!foo/bar -> ../!home!jdoe!bin/myalias
+
+thus enabling the same basename reasoning as above, while building the
+command only once.
+
+The exclamation-delimited paths are always absolute (so /specfile can
+be cached as !/specfile), and escape all the possible characters into
+something that is safe to use as a non-hidden path segment. The exact
+rules are an implementation detail.
+
+The cache path depends purely on the demand spec path. This way, if
+two demand specs talk about the same import path, they'll be cached
+separately, as there might be other options in the spec file that
+affect the compilation, or they might just be manually controlled to
+be specific versions with -gopath etc. To share cache across spec
+files, symlink the spec files.
+
+*/
+
 var (
 	upgrade   = flag.Bool("upgrade", false, "force upgrade even if older version exists")
 	gopath    = flag.Bool("gopath", false, "use GOPATH from environment instead of downloading all dependencies")
@@ -66,6 +123,20 @@ func maybeReadlink(path string) (string, error) {
 	}
 }
 
+// like os.Symlink but also atomically overwrites existing files
+func symlink(oldname, newname string) error {
+	dir, base := filepath.Split(newname)
+	tmp := filepath.Join(dir, fmt.Sprintf(".temp-%s.%d.tmp", base, os.Getpid()))
+	if err := os.Symlink(oldname, tmp); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, newname); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
 // copy environment, but override GOPATH
 func copyEnvWithGopath(gopath string) []string {
 	old := os.Environ()
@@ -93,9 +164,8 @@ type specification struct {
 	}
 }
 
-func build(cacheDir, cacheBinDir, cacheBinArchDir string,
-	specPath string, specFile io.Reader, binary string) error {
-	err := maybeMkdirs(0750, cacheDir, cacheBinDir, cacheBinArchDir)
+func build(specPath string, specFile io.Reader, cacheSpecDir string, specBase string) error {
+	err := maybeMkdirs(0750, cacheSpecDir)
 	if err != nil {
 		return fmt.Errorf("cannot create cache directory: %v", err)
 	}
@@ -147,7 +217,7 @@ func build(cacheDir, cacheBinDir, cacheBinArchDir string,
 
 	// poor man's tempfile atomicity; go build complains if
 	// destination exists
-	tmpBin := fmt.Sprintf("%s.%d.tmp", binary, os.Getpid())
+	tmpBin := filepath.Join(cacheSpecDir, fmt.Sprintf(".temp-%s.%d.tmp", specBase, os.Getpid()))
 	defer func() {
 		err := os.Remove(tmpBin)
 		if err != nil && !os.IsNotExist(err) {
@@ -164,20 +234,55 @@ func build(cacheDir, cacheBinDir, cacheBinArchDir string,
 		return fmt.Errorf("could not build go package: %v", err)
 	}
 
-	err = os.Rename(tmpBin, binary)
+	err = os.Rename(tmpBin, filepath.Join(cacheSpecDir, specBase))
 	if err != nil {
 		return fmt.Errorf("could not put new binary in place: %v", err)
 	}
 	return nil
 }
 
+// Escapes a string in a way that is human-readable and safe to use as
+// a file basename without collisions. The escaping is never reversed.
+func escapeFilename(s string) string {
+	// no need for trailing slashes
+	s = strings.TrimSuffix(s, "/")
+	// first prevent collisions by escaping all of our escape characters
+	s = strings.Replace(s, "%", "%25", -1)
+	// NIL is illegal file basename
+	s = strings.Replace(s, "\x00", "%00", -1)
+	// slash is illegal file basename; it's common enough to deserve
+	// its own special handling, so move '!' out of the way and use
+	// that
+	s = strings.Replace(s, "!", "%21", -1)
+	s = strings.Replace(s, "/", "!", -1)
+	// be friendly toward bad shell scripting and prevent most common
+	// whitespace; strictly optional
+	s = strings.Replace(s, " ", "%20", -1)
+	s = strings.Replace(s, "\n", "%0a", -1)
+	// avoid climbing up the directory tree
+	if s[0] == '.' {
+		s = "%2e" + s[1:]
+	}
+	return s
+}
+
+func cacheNames(specPath, cacheBinArchDir string) (cacheSpecDir, specBase string, err error) {
+	specDir, specBase := filepath.Split(specPath)
+	if specBase[0] == '.' {
+		return "", "", fmt.Errorf("refusing to run hidden spec file: %s", specPath)
+	}
+
+	specAbsDir, err := filepath.Abs(specDir)
+	if err != nil {
+		return "", "", fmt.Errorf("determining absolute path: %v", err)
+	}
+	specDirSafe := escapeFilename(specAbsDir)
+	cacheSpecDir = filepath.Join(cacheBinArchDir, specDirSafe)
+	return cacheSpecDir, specBase, nil
+}
+
 func doit(args []string) error {
 	specPath := args[0]
-
-	specBase := filepath.Base(specPath)
-	if specBase[0] == '.' {
-		return fmt.Errorf("refusing to run hidden spec file: %s", specPath)
-	}
 
 	// open it here to guard against typos; we don't need to read
 	// until we know it's a cache miss
@@ -192,14 +297,6 @@ func doit(args []string) error {
 		_ = specFile.Close()
 	}()
 
-	dest, err := maybeReadlink(specPath)
-	if err != nil {
-		return fmt.Errorf("readlink: %v", err)
-	}
-	if dest != "" {
-		specBase = filepath.Base(dest)
-	}
-
 	cacheDir, err := getCacheDir()
 	if err != nil {
 		return err
@@ -208,21 +305,78 @@ func doit(args []string) error {
 	arch := fmt.Sprintf("%s_%s", runtime.GOOS, runtime.GOARCH)
 	cacheBinArchDir := filepath.Join(cacheBinDir, arch)
 
-	binary := filepath.Join(cacheBinArchDir, specBase)
+	// TODO combine this state tracking into a single struct, so there's less places to screw up
+
+	// the current spec path, as we follow symlinks
+	realSpecPath := specPath
+	cacheSpecDir, specBase, err := cacheNames(realSpecPath, cacheBinArchDir)
+	if err != nil {
+		return err
+	}
+
+	// we always exec the original cachefile, to get argv[0] right
+	binary := filepath.Join(cacheSpecDir, specBase)
 	binArgs := make([]string, len(args))
 	binArgs[0] = binary
 	copy(binArgs[1:], args[1:])
 
-	if !*onlyBuild && !*upgrade {
-		err = runBinary(binary, binArgs, os.Environ())
-		if err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("cannot exec %s: %v", binary, err)
+	for symlinkIter := 1; ; symlinkIter++ {
+		const maxSymlinkIter = 100
+		if symlinkIter > maxSymlinkIter {
+			return fmt.Errorf("too many levels of symbolic links: %s", specPath)
 		}
+
+		if !*onlyBuild && !*upgrade {
+			err = runBinary(binary, binArgs, os.Environ())
+			if err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("cannot exec %s: %v", binary, err)
+			}
+		}
+
+		// if we're still here, we don't have a cached binary, or we're
+		// upgrading
+
+		// make sure cache directory exists
+		if err := maybeMkdirs(0750, cacheDir, cacheBinDir, cacheBinArchDir); err != nil {
+			return fmt.Errorf("cannot create cache directory: %v", err)
+		}
+
+		target, err := maybeReadlink(realSpecPath)
+		if err != nil {
+			return err
+		}
+		if target == "" {
+			// not a symlink
+			break
+		}
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(realSpecPath), target)
+		}
+
+		// drop in a breadcrumb that can be used the next time around,
+		// mirroring the specfile symlink
+		cacheSpecDir, specBase, err = cacheNames(target, cacheBinArchDir)
+		if err != nil {
+			return err
+		}
+		p := filepath.Join("..", filepath.Base(cacheSpecDir), specBase)
+		symCacheSpecDir, symSpecBase, err := cacheNames(realSpecPath, cacheBinArchDir)
+		if err != nil {
+			return err
+		}
+		if err := maybeMkdirs(0750, symCacheSpecDir); err != nil {
+			return fmt.Errorf("cannot create cache directory: %v", err)
+		}
+		if err := symlink(p, filepath.Join(symCacheSpecDir, symSpecBase)); err != nil {
+			return err
+		}
+
+		// finally, follow the symlink
+		realSpecPath = target
 	}
 
-	// if we're still here, we don't have a cached binary, or we're
-	// upgrading
-	err = build(cacheDir, cacheBinDir, cacheBinArchDir, specPath, specFile, binary)
+	// not a symlink
+	err = build(specPath, specFile, cacheSpecDir, specBase)
 	if err != nil {
 		return err
 	}

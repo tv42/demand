@@ -13,5 +13,17 @@
   $ touch -r stamp foo
   $ # run via symlink; must use cached results for linked-to specfile
   $ ln -s foo bar
-  $ DEMAND_CACHE_DIR="$C" demand -gopath bar
+  $ XDG_CONFIG_HOME="$PWD/home" DEMAND_CACHE_DIR="$C" demand -gopath bar
   ok
+  $ find "$PWD/cache/bin/$(go env GOOS)_$(go env GOARCH)" -mindepth 1 -type l \
+  >  -printf 'name=%P\ntarget=%l\n.\n'
+  name=[^/]+/bar (re)
+  target=../[^/]+/foo (re)
+  .
+  $ find "$PWD/cache/bin/$(go env GOOS)_$(go env GOARCH)" -mindepth 1 -type f \
+  >  -printf 'name=%P\nmode=%M\ntype=%y\nlinks=%n\n.\n'
+  name=[^/]+/foo (re)
+  mode=-rwxr-xr-x
+  type=f
+  links=1
+  .
