@@ -14,7 +14,7 @@ import (
 	"strings"
 	"syscall"
 
-	"gopkg.in/v1/yaml"
+	"gopkg.in/yaml.v1"
 )
 
 var (
